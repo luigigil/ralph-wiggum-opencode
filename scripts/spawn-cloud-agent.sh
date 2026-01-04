@@ -129,8 +129,21 @@ main() {
 
   # 5. Build continuation prompt
   # Cloud Agent will read from .ralph/ in the repo (we sync progress there too)
-  CONTINUATION_PROMPT=$(cat <<-EOF
-# Ralph Iteration $NEXT_ITERATION (Cloud Agent - Fresh Context)
+  # Check for context from previous agent (passed via env vars from watch-cloud-agent.sh)
+  local context_section=""
+  if [[ -n "${RALPH_CONTEXT_SUMMARY:-}" ]]; then
+    context_section="
+## Context from Previous Agent
+
+The previous agent was stopped due to: ${RALPH_STOP_REASON:-context_limit}
+
+Here's what the previous agent was working on:
+${RALPH_CONTEXT_SUMMARY}
+
+Continue from where they left off. Don't repeat work that's already done."
+  fi
+
+  CONTINUATION_PROMPT="# Ralph Iteration $NEXT_ITERATION (Cloud Agent - Fresh Context)
 
 You are continuing an autonomous development task using the Ralph methodology.
 
@@ -139,6 +152,7 @@ You are continuing an autonomous development task using the Ralph methodology.
 1. **Task Definition**: Read \`RALPH_TASK.md\` for the task and completion criteria.
 2. **Progress**: Read \`.ralph/progress.md\` to see what's been accomplished.
 3. **Guardrails**: Read \`.ralph/guardrails.md\` for lessons learned.
+${context_section}
 
 ## Your Mission
 
@@ -150,13 +164,23 @@ Continue from where iteration $CURRENT_ITERATION left off. That agent's context 
 2. Work on the next unchecked criterion in RALPH_TASK.md
 3. Run tests after changes (if test_command is defined)
 4. Check off completed criteria with [x]
-5. Commit frequently with descriptive messages
-6. When ALL criteria pass: say \`RALPH_COMPLETE\`
-7. If stuck 3+ times on same issue: say \`RALPH_GUTTER\`
+5. **Commit after each criterion**: \`git add -A && git commit -m 'ralph: [criterion] - description'\`
+6. **Push regularly**: \`git push\` after commits
+7. **Update progress**: After significant work, update \`.ralph/progress.md\` with what you did
+8. When ALL criteria pass: say \`RALPH_COMPLETE\`
+9. If stuck 3+ times on same issue: say \`RALPH_GUTTER\`
 
-Begin by reading the state files.
-EOF
-)
+## Context Rotation Warning
+
+You may receive a warning that context is running low. When you see it:
+1. Finish your current file edit
+2. Commit and push your changes
+3. Update .ralph/progress.md with what you accomplished and what's next
+4. You will be rotated to a fresh agent that continues your work
+
+This is normal - it keeps the agent effective by preventing context pollution.
+
+Begin by reading the state files."
 
   # 6. Use claude-4.5-opus-high-thinking
   echo "🚀 Spawning Cloud Agent for iteration $NEXT_ITERATION..."
