@@ -108,7 +108,6 @@ elif [[ -f "$HOME/.cursor/ralph-config.json" ]]; then
 fi
 
 if [[ "$CLOUD_ENABLED" == "false" ]] && [[ -t 0 ]]; then
-  # Only prompt if running interactively (not piped)
   echo "To enable Cloud Mode, you can:"
   echo "  1. Set environment variable: export CURSOR_API_KEY='your-key'"
   echo "  2. Create ~/.cursor/ralph-config.json with your key"
@@ -126,6 +125,10 @@ fi
 echo ""
 echo "📁 Initializing .ralph/ state directory..."
 
+# -----------------------------------------------------------------------------
+# HOOK-MANAGED FILES (append-only, machine-written)
+# -----------------------------------------------------------------------------
+
 cat > .ralph/state.md <<'EOF'
 ---
 iteration: 0
@@ -137,8 +140,70 @@ started_at: {{TIMESTAMP}}
 
 Ready to begin. Start a conversation and mention the Ralph task.
 EOF
-sed -i "s/{{TIMESTAMP}}/$(date -u +%Y-%m-%dT%H:%M:%SZ)/" .ralph/state.md 2>/dev/null || \
+if [[ "$OSTYPE" == "darwin"* ]]; then
   sed -i '' "s/{{TIMESTAMP}}/$(date -u +%Y-%m-%dT%H:%M:%SZ)/" .ralph/state.md
+else
+  sed -i "s/{{TIMESTAMP}}/$(date -u +%Y-%m-%dT%H:%M:%SZ)/" .ralph/state.md
+fi
+
+cat > .ralph/context-log.md <<'EOF'
+# Context Allocation Log (Hook-Managed)
+
+> ⚠️ This file is managed by hooks. Do not edit manually.
+
+Tracking what's been loaded into context to prevent redlining.
+
+## The malloc/free Metaphor
+
+- Reading files = malloc() into context
+- Editing files = malloc() (diffs go into context)
+- There is NO free() - context cannot be selectively cleared
+- Only way to free: start a new conversation
+
+## Current Session
+
+| File | Size (est tokens) | Timestamp |
+|------|-------------------|-----------|
+
+## Estimated Context Usage
+
+- Allocated: 0 tokens
+- Threshold: 80000 tokens (warn at 80%)
+- Status: 🟢 Healthy
+
+EOF
+
+cat > .ralph/edits.log <<'EOF'
+# Edit Log (Hook-Managed)
+# This file is append-only, managed by hooks. Do not edit manually.
+# Format: TIMESTAMP | FILE | CHANGE_TYPE | CHARS | ITERATION
+
+EOF
+
+cat > .ralph/failures.md <<'EOF'
+# Failure Log (Hook-Managed)
+
+> ⚠️ This file is managed by hooks. Do not edit manually.
+
+Tracking failure patterns to detect "gutter" situations.
+
+## What is the Gutter?
+
+> "If the bowling ball is in the gutter, there's no saving it."
+
+When the agent is stuck in a failure loop, it's "in the gutter."
+The solution is fresh context, not more attempts in polluted context.
+
+## Recent Failures
+
+(Failures will be logged here by hooks)
+
+## Pattern Detection
+
+- Repeated failures: 0
+- Gutter risk: Low
+
+EOF
 
 cat > .ralph/guardrails.md <<'EOF'
 # Ralph Guardrails (Signs)
@@ -163,10 +228,6 @@ These are lessons learned from iterations. Follow these to avoid known pitfalls.
 - Focus on one criterion at a time
 - Don't try to do everything in one iteration
 
-### Sign: Update Progress
-- Always update .ralph/progress.md with what you accomplished
-- This is how future iterations (and fresh contexts) know what's done
-
 ---
 
 ## Learned Signs
@@ -175,71 +236,28 @@ These are lessons learned from iterations. Follow these to avoid known pitfalls.
 
 EOF
 
-cat > .ralph/context-log.md <<'EOF'
-# Context Allocation Log
-
-Tracking what's been loaded into context to prevent redlining.
-
-## The malloc/free Metaphor
-
-- Reading files = malloc() into context
-- There is NO free() - context cannot be selectively cleared
-- Only way to free: start a new conversation
-
-## Current Session
-
-| File | Size (est tokens) | Timestamp |
-|------|-------------------|-----------|
-
-## Estimated Context Usage
-
-- Allocated: 0 tokens
-- Threshold: 80000 tokens (warn at 80%)
-- Status: 🟢 Healthy
-
-EOF
-
-cat > .ralph/failures.md <<'EOF'
-# Failure Log
-
-Tracking failure patterns to detect "gutter" situations.
-
-## What is the Gutter?
-
-> "If the bowling ball is in the gutter, there's no saving it."
-
-When the agent is stuck in a failure loop, it's "in the gutter."
-The solution is fresh context, not more attempts in polluted context.
-
-## Recent Failures
-
-(Failures will be logged here)
-
-## Pattern Detection
-
-- Repeated failures: 0
-- Gutter risk: Low
-
-EOF
+# -----------------------------------------------------------------------------
+# AGENT-MANAGED FILES (agent owns these, can rewrite)
+# -----------------------------------------------------------------------------
 
 cat > .ralph/progress.md <<'EOF'
-# Progress Log
+# Progress Log (Agent-Managed)
 
-## Summary
+> This file is YOUR workspace. Update it as you work.
+> You can rewrite, reorganize, or restructure this file as needed.
+> Raw edit history is preserved in `edits.log` by hooks.
 
-- Iterations completed: 0
-- Tasks completed: 0
-- Current status: Initialized
+## Current Status
 
-## How This Works
+Not started.
 
-Progress is tracked in THIS FILE, not in LLM context.
-When context is freed (new conversation), the new context reads this file.
-This is how Ralph maintains continuity across the malloc/free cycle.
+## Completed Items
 
-## Iteration History
+(Update this as you complete items from RALPH_TASK.md)
 
-(Progress will be logged here as iterations complete)
+## Notes
+
+(Add any notes, observations, or context here)
 
 EOF
 
@@ -315,11 +333,12 @@ When working on this task:
 
 1. Read `.ralph/progress.md` to see what's been done
 2. Check `.ralph/guardrails.md` for signs to follow
-3. Work on the next incomplete criterion
+3. Work on the next incomplete criterion (marked [ ])
 4. Update `.ralph/progress.md` with your progress
-5. Commit your changes with descriptive messages
-6. When ALL criteria are met, say: `RALPH_COMPLETE: All criteria satisfied`
-7. If stuck on the same issue 3+ times, say: `RALPH_GUTTER: Need fresh context`
+5. Check off completed criteria in this file (change [ ] to [x])
+6. Commit your changes with descriptive messages
+7. When ALL criteria are [x], say: `RALPH_COMPLETE: All criteria satisfied`
+8. If stuck on the same issue 3+ times, say: `RALPH_GUTTER: Need fresh context`
 EOF
   echo "✓ Created RALPH_TASK.md with TypeScript example task"
 else
@@ -330,28 +349,26 @@ fi
 # UPDATE .gitignore
 # =============================================================================
 
-if [[ -f ".gitignore" ]]; then
-  if ! grep -q "^\.ralph/" .gitignore 2>/dev/null; then
-    echo "" >> .gitignore
-    echo "# Ralph state (regenerated each session)" >> .gitignore
-    echo ".ralph/" >> .gitignore
-  fi
-  if ! grep -q "ralph-config.json" .gitignore 2>/dev/null; then
-    echo "" >> .gitignore
-    echo "# Ralph config (may contain API key)" >> .gitignore
-    echo ".cursor/ralph-config.json" >> .gitignore
-  fi
-  echo "✓ Updated .gitignore"
-else
-  cat > .gitignore <<'EOF'
-# Ralph state (regenerated each session)
-.ralph/
+GITIGNORE_ADDITIONS=""
 
+# Check what needs to be added
+if [[ -f ".gitignore" ]]; then
+  if ! grep -q "ralph-config.json" .gitignore 2>/dev/null; then
+    GITIGNORE_ADDITIONS="$GITIGNORE_ADDITIONS
 # Ralph config (may contain API key)
-.cursor/ralph-config.json
-EOF
-  echo "✓ Created .gitignore"
+.cursor/ralph-config.json"
+  fi
+else
+  GITIGNORE_ADDITIONS="# Ralph config (may contain API key)
+.cursor/ralph-config.json"
 fi
+
+if [[ -n "$GITIGNORE_ADDITIONS" ]]; then
+  echo "$GITIGNORE_ADDITIONS" >> .gitignore
+  echo "✓ Updated .gitignore"
+fi
+
+# Note: We do NOT gitignore .ralph/ - progress should be committed!
 
 # =============================================================================
 # SUMMARY
@@ -363,11 +380,21 @@ echo "✅ Ralph installed!"
 echo "═══════════════════════════════════════════════════════════════════"
 echo ""
 echo "Files created:"
-echo "  .cursor/hooks.json        - Cursor hooks configuration"
-echo "  .cursor/ralph-scripts/    - Hook scripts"
-echo "  .cursor/SKILL.md          - Skill definition"
-echo "  .ralph/                   - State tracking directory"
-echo "  RALPH_TASK.md             - Your task definition (edit this!)"
+echo ""
+echo "  📁 .cursor/"
+echo "     ├── hooks.json           - Cursor hooks configuration"
+echo "     ├── ralph-scripts/       - Hook scripts"
+echo "     └── SKILL.md             - Skill definition"
+echo ""
+echo "  📁 .ralph/"
+echo "     ├── state.md             - Current iteration (hook-managed)"
+echo "     ├── context-log.md       - Context tracking (hook-managed)"
+echo "     ├── edits.log            - Raw edit history (hook-managed)"
+echo "     ├── failures.md          - Failure patterns (hook-managed)"
+echo "     ├── guardrails.md        - Signs to follow (hook-managed)"
+echo "     └── progress.md          - Your progress (agent-managed)"
+echo ""
+echo "  📄 RALPH_TASK.md            - Your task definition (edit this!)"
 echo ""
 echo "Next steps:"
 echo "  1. Edit RALPH_TASK.md to define your actual task"
