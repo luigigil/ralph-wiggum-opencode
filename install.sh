@@ -1,10 +1,10 @@
 #!/bin/bash
 # Ralph Wiggum: One-click installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/agrimsingh/ralph-wiggum-opencode/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/luigigil/ralph-wiggum-opencode/main/install.sh | bash
 
 set -euo pipefail
 
-REPO_RAW="https://raw.githubusercontent.com/agrimsingh/ralph-wiggum-opencode/main"
+REPO_RAW="https://raw.githubusercontent.com/luigigil/ralph-wiggum-opencode/main"
 
 echo "═══════════════════════════════════════════════════════════════════"
 echo "🐛 Ralph Wiggum Installer"
