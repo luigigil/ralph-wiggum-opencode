@@ -76,7 +76,7 @@ This creates two problems:
 
 ```bash
 cd your-project
-curl -fsSL https://raw.githubusercontent.com/agrimsingh/ralph-wiggum-opencode/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/luigigil/ralph-wiggum-opencode/main/install.sh | bash
 ```
 
 This creates:
